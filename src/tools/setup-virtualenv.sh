@@ -63,6 +63,15 @@ fi
 rm -fr $DIR
 mkdir -p $DIR
 $PYTHON -m venv $DIR
+# 配置pypi仓库为本地源
+# 由于旧版本的pip可能没有`config`子命令，所以不能用`config set`命令行的方式管理镜像源
+#   $DIR/bin/pip config set --site global.index-url http://mirrors.aliyun.com/pypi/simple/
+#   $DIR/bin/pip config set --site global.trusted-host mirrors.aliyun.com
+tee $DIR/pip.conf <<-EOF
+[global]
+trusted-host=mirrors.aliyun.com
+index-url=http://mirrors.aliyun.com/pypi/simple/
+EOF
 . $DIR/bin/activate
 
 if pip --help | grep -q disable-pip-version-check; then

@@ -5,8 +5,8 @@ cd ..
 TOPDIR=`pwd`
 
 install -d -m0755 build-doc
-
-if command -v dpkg >/dev/null; then
+# 检查依赖的工具是否已安装。这里只检测，不包安装
+if command -v dpkg >/dev/null; then     # debian家族采用dpkg方式安装软件包
     packages=`cat ${TOPDIR}/doc_deps.deb.txt`
     for package in $packages; do
     if [ "$(dpkg --status -- $package 2>&1 | sed -n 's/^Status: //p')" != "install ok installed" ]; then
@@ -19,7 +19,7 @@ if command -v dpkg >/dev/null; then
         echo "sudo apt-get install -o APT::Install-Recommends=true $missing" 1>&2
         exit 1
     fi
-elif command -v yum >/dev/null; then
+elif command -v yum >/dev/null; then    # redhat家族采用yum方式安装软件包
     for package in ant ditaa doxygen libxslt-devel libxml2-devel graphviz python3-devel python3-pip python3-Cython; do
 	if ! rpm -q --whatprovides $package >/dev/null ; then
 		missing="${missing:+$missing }$package"
@@ -53,16 +53,19 @@ set -e
 md5=$vdir/md5
 if test -f $md5 && md5sum --check $md5 > /dev/null; then
     # reusing existing venv
+    # 如果md5校验文件存在且md5校验一致，则复用当前Python虚拟环境
     :
 else
+    # 否则创建新的Python虚拟环境
     python3 -m venv $vdir
-
+    # 更新pip版本
     $vdir/bin/pip install --quiet wheel
     $vdir/bin/pip install --quiet \
               -r $TOPDIR/admin/doc-requirements.txt \
               -r $TOPDIR/admin/doc-python-common-requirements.txt
     BUILD_DOC=1 $vdir/bin/pip install --quiet \
          -r $TOPDIR/admin/doc-pybind.txt
+    # 重新生成md5校验文件
     md5sum \
         $TOPDIR/admin/doc-requirements.txt \
         $TOPDIR/admin/doc-python-common-requirements.txt \

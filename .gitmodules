@@ -1,74 +1,96 @@
 [submodule "ceph-object-corpus"]
+	; 编码ceph结构的语料库
 	path = ceph-object-corpus
 	url = https://github.com/ceph/ceph-object-corpus.git
 [submodule "src/erasure-code/jerasure/jerasure"]
+	; 一个用C语言编写的库，便于存储的擦除编码
 	path = src/erasure-code/jerasure/jerasure
 	url = https://github.com/ceph/jerasure.git
 	branch = v2-ceph
 [submodule "src/erasure-code/jerasure/gf-complete"]
+	; Galois的综合开源库，这个库实现了适用于存储擦除编码的每一种伽罗瓦域乘法技术
 	path = src/erasure-code/jerasure/gf-complete
 	url = https://github.com/ceph/gf-complete.git
 	branch = v3-ceph
 [submodule "src/rocksdb"]
+	; 用于快速存储的嵌入式键值存储
 	path = src/rocksdb
 	url = https://github.com/ceph/rocksdb
 	ignore = dirty
 [submodule "ceph-erasure-code-corpus"]
+	; Ceph的对象擦除编码
 	path = ceph-erasure-code-corpus
 	url = https://github.com/ceph/ceph-erasure-code-corpus.git
 [submodule "src/googletest"]
+	; Google测试框架
 	path = src/googletest
 	url = https://github.com/ceph/googletest
 	branch = ceph-release-1.7.x
 [submodule "src/spdk"]
+	; 存储性能开发套件
 	path = src/spdk
 	url = https://github.com/ceph/spdk.git
 [submodule "src/xxHash"]
+	; 极快的非加密哈希算法
 	path = src/xxHash
 	url = https://github.com/ceph/xxHash.git
 [submodule "src/isa-l"]
+	; Intel(R) Intelligent Storage Acceleration Library - 一组针对存储应用程序优化的低级功能。
 	path = src/isa-l
 	url = https://github.com/ceph/isa-l
 [submodule "src/zstd"]
+	; 标准快速实时压缩算法
 	path = src/zstd
 	url = https://github.com/facebook/zstd
 [submodule "src/crypto/isa-l/isa-l_crypto"]
+	; Intel(R) Intelligent Storage Acceleration Library Crypto Version。一个针对存储应用程序的优化低级函数集合。
 	path = src/crypto/isa-l/isa-l_crypto
 	url = https://github.com/01org/isa-l_crypto
 [submodule "src/blkin"]
+	; Blkin是一个项目，它允许你按照Google Dapper论文中描述的跟踪语义用LTTng跟踪应用程序。
 	path = src/blkin
 	url = https://github.com/ceph/blkin
 [submodule "src/rapidjson"]
+	; 一个用于C++的快速JSON解析器/生成器，具有SAX/DOM风格的API。
 	path = src/rapidjson
 	url = https://github.com/ceph/rapidjson
 [submodule "src/dmclock"]
+	; 实现dmclock分布式服务质量算法的代码。
 	path = src/dmclock
 	url = https://github.com/ceph/dmclock.git
 [submodule "src/seastar"]
+	; 高性能服务器端应用框架
 	path = src/seastar
 	url = https://github.com/ceph/seastar.git
 [submodule "src/fmt"]
+	; 小型、安全和快速的格式化库
 	path = src/fmt
 	url = https://github.com/ceph/fmt.git
 [submodule "src/c-ares"]
+	; 异步DNS请求的C库
 	path = src/c-ares
 	url = https://github.com/ceph/c-ares.git
 [submodule "src/spawn"]
+	; 一个用于boost::asio的c++11堆栈式协程库。
 	path = src/spawn
 	url = https://github.com/ceph/spawn.git
 [submodule "src/pybind/mgr/rook/rook-client-python"]
 	path = src/pybind/mgr/rook/rook-client-python
 	url = https://github.com/ceph/rook-client-python.git
 [submodule "s3select"]
+	; 用于处理S3的库选择查询并在CSV文件上执行它们(当前阶段)
 	path = src/s3select
 	url = https://github.com/ceph/s3select.git
 [submodule "src/libkmip"]
+	; 密钥管理互操作性协议(KMIP)的ISO C11实现
 	path = src/libkmip
 	url = https://github.com/ceph/libkmip
 	branch = ceph-master
 [submodule "src/arrow"]
+	; 一个多语言工具箱，用于加速数据交换和内存处理
 	path = src/arrow
 	url = https://github.com/apache/arrow.git
 [submodule "src/utf8proc"]
+	; 一个干净的C库，用于处理UTF 8 Unicode数据
 	path = src/utf8proc
 	url = https://github.com/JuliaStrings/utf8proc

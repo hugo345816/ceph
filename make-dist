@@ -1,9 +1,9 @@
 #!/bin/bash -e
 
-SCRIPTNAME="$(basename "${0}")"
-BASEDIR="$(readlink -f "$(dirname "${0}")")"
+SCRIPTNAME="$(basename "${0}")"                 # 获得当前脚本的名称，不包括文件夹部分
+BASEDIR="$(readlink -f "$(dirname "${0}")")"    # 得得当前脚本所在目录
 
-if [ ! -d .git ]; then
+if [ ! -d .git ]; then  # 当前目录下没有`.git`子目录。必须在`git checkout`根目录下执行。
     echo "$SCRIPTNAME: Full path to the script: $BASEDIR/$SCRIPTNAME"
     echo "$SCRIPTNAME: No .git present. Run this from the base dir of the git checkout."
     exit 1
@@ -13,34 +13,42 @@ fi
 # will expose us to the dreaded "[BUG] npm run [command] failed if the directory
 # path contains colon" bug https://github.com/npm/cli/issues/633
 # (see https://tracker.ceph.com/issues/39556 for details)
+# 不允许脚本路径中存在冒号（`:`）
 if [[ "$BASEDIR" == *:* ]] ; then
     echo "$SCRIPTNAME: Full path to the script: $BASEDIR/$SCRIPTNAME"
     echo "$SCRIPTNAME: The path to the script contains a colon. Their presence has been known to break the script."
     exit 1
 fi
 
-version=$1
-[ -z "$version" ] && version=$(git describe --long --match 'v*' | sed 's/^v//')
-if expr index $version '-' > /dev/null; then
-    rpm_version=$(echo $version | cut -d - -f 1-1)
-    rpm_release=$(echo $version | cut -d - -f 2- | sed 's/-/./')
+version=$1  # 通过命令行参数传递版本号
+[ -z "$version" ] && version=$(git describe --long --match 'v*' | sed 's/^v//') # 否则从当前git分支信息中提取
+if expr index $version '-' > /dev/null; then                        # 是否存在`-`符
+    rpm_version=$(echo $version | cut -d - -f 1-1)                  # 提取版本号
+    rpm_release=$(echo $version | cut -d - -f 2- | sed 's/-/./')    # 提取release号
 else
+    # 只包含版本号，未包含release号
     rpm_version=$version
     rpm_release=0
 fi
 
-outfile="ceph-$version"
+outfile="ceph-$version" # 最终要生成的文件名
 echo "version $version"
 
 # update submodules
 echo "updating submodules..."
-force=$(if git submodule usage 2>&1 | grep --quiet 'update.*--force'; then echo --force ; fi)
+force=$(if git submodule usage 2>&1 | grep --quiet 'update.*--force'; then echo --force ; fi)   # 探测`git submodule`子命令是否`--force`选项，如果支持，则加上
+# git submodule sync: 将各个子模板的远程URL设置为`.gitmodules`中指定的值。
+# git submodule update：递归更新所有子模块（强制）
 if ! git submodule sync || ! git submodule update $force --init --recursive; then
     echo "Error: could not initialize submodule projects"
     echo "  Network connectivity might be required."
     exit 1
 fi
 
+# 下载文件
+# 第一个参数为文件名
+# 第二个参数为sha256校验码
+# 后续参数表示可选的多个下载地址（只要有一个能成功下载就行）
 download_from() {
     fname=$1
     shift
@@ -51,30 +59,37 @@ download_from() {
         url_base=$1
         shift
         if [ -z $url_base ]; then
+            # 没有更多的下载地址了。失败退出
             echo "Error: failed to download $name."
             exit
         fi
         url=$url_base/$fname
-        wget -c --no-verbose -O $fname $url
+        wget -c --no-verbose -O $fname $url     # 调用wget工具进行下载。`-c`参数启用断点下载
         if [ $? != 0 -o ! -e $fname ]; then
-            echo "Download of $url failed"
+            echo "Download of $url failed"      # 下载失败
         elif [ $(sha256sum $fname | awk '{print $1}') != $sha256 ]; then
+            # sha256校验失败
             echo "Error: failed to download $name: SHA256 mismatch."
         else
-            break
+            break   # 下载功能，退出循环
         fi
     done
     set -e
 }
 
+# 下载boost库
+# 第一个参数为版本号
+# 第二个参数为sha256校验码
+# 后续参数表示可选的多个下载地址（只要有一个能成功下载就行）
 download_boost() {
     boost_version=$1
     shift
     boost_sha256=$1
     shift
-    boost_version_underscore=$(echo $boost_version | sed 's/\./_/g')
-    boost_fname=boost_${boost_version_underscore}.tar.bz2
-    download_from $boost_fname $boost_sha256 $*
+    boost_version_underscore=$(echo $boost_version | sed 's/\./_/g')    # 把版本号中的点号（`.`）更变为下划线（`_`）
+    boost_fname=boost_${boost_version_underscore}.tar.bz2               # 组装成待下载的文件名
+    download_from $boost_fname $boost_sha256 $*                         # 下载
+    # 解压缩，并排除一些不需要的文件
     tar xjf $boost_fname -C src \
         --exclude="$boost_version_underscore/libs/*/doc" \
         --exclude="$boost_version_underscore/libs/*/example" \
@@ -85,18 +100,23 @@ download_boost() {
         --exclude="$boost_version_underscore/tools/quickbook" \
         --exclude="$boost_version_underscore/tools/auto_index" \
         --exclude='doc' --exclude='more' --exclude='status'
-    mv src/boost_${boost_version_underscore} src/boost
-    tar cf ${outfile}.boost.tar ${outfile}/src/boost
-    rm -rf src/boost
+    mv src/boost_${boost_version_underscore} src/boost  # 移动到`src`子目录下
+    tar cf ${outfile}.boost.tar ${outfile}/src/boost    # 重新打成`tar`包（无需压缩）
+    rm -rf src/boost                                    # 删除临时文件
 }
 
+# 下载liburing库
+# 第一个参数为版本号
+# 第二个参数为sha256校验码
+# 后续参数表示可选的多个下载地址（只要有一个能成功下载就行）
 download_liburing() {
     liburing_version=$1
     shift
     liburing_sha256=$1
     shift
-    liburing_fname=liburing-${liburing_version}.tar.gz
-    download_from $liburing_fname $liburing_sha256 $*
+    liburing_fname=liburing-${liburing_version}.tar.gz  # 组装成待下载的文件名
+    download_from $liburing_fname $liburing_sha256 $*   # 下载
+    # 解压缩，并排除一些不需要的文件
     tar xzf $liburing_fname -C src  \
         --exclude=debian \
         --exclude=examples \
@@ -104,60 +124,70 @@ download_liburing() {
         --exclude=test
     # normalize the names, liburing-0.7 if downloaded from git.kernel.dk,
     # liburing-liburing-0.7 from github.com
-    mv src/liburing-* src/liburing
-    tar cf ${outfile}.liburing.tar ${outfile}/src/liburing
-    rm -rf src/liburing
+    mv src/liburing-* src/liburing  # 移动到`src`子目录下
+    tar cf ${outfile}.liburing.tar ${outfile}/src/liburing  # 重新打成`tar`包（无需压缩）
+    rm -rf src/liburing # 删除临时文件
 }
 
+# 下载pmdk库
+# 第一个参数为版本号
+# 第二个参数为sha256校验码
+# 后续参数表示可选的多个下载地址（只要有一个能成功下载就行）
 download_pmdk() {
     pmdk_version=$1
     shift
     pmdk_sha256=$1
     shift
-    pmdk_fname=pmdk-${pmdk_version}.tar.gz
-    download_from $pmdk_fname $pmdk_sha256 $*
+    pmdk_fname=pmdk-${pmdk_version}.tar.gz      # 组装成待下载的文件名
+    download_from $pmdk_fname $pmdk_sha256 $*   # 下载
+    # 解压缩，并排除一些不需要的文件
     tar xzf $pmdk_fname -C src \
         --exclude="pmdk-${pmdk_version}/doc" \
         --exclude="pmdk-${pmdk_version}/src/test" \
         --exclude="pmdk-${pmdk_version}/src/examples" \
         --exclude="pmdk-${pmdk_version}/src/benchmarks"
-    mv src/pmdk-${pmdk_version} src/pmdk
-    tar cf ${outfile}.pmdk.tar ${outfile}/src/pmdk
-    rm -rf src/pmdk
+    mv src/pmdk-${pmdk_version} src/pmdk            # 移动到`src`子目录下
+    tar cf ${outfile}.pmdk.tar ${outfile}/src/pmdk  # 重新打成`tar`包（无需压缩）
+    rm -rf src/pmdk                                 # 删除临时文件
 }
 
+# 生成dashboard前端应用
 build_dashboard_frontend() {
-  CURR_DIR=`pwd`
-  TEMP_DIR=`mktemp -d`
+  CURR_DIR=`pwd`        # 保存当前目录
+  TEMP_DIR=`mktemp -d`  # 生成临时目录
 
-  $CURR_DIR/src/tools/setup-virtualenv.sh $TEMP_DIR
-  $TEMP_DIR/bin/pip install nodeenv
-  $TEMP_DIR/bin/nodeenv --verbose -p --node=14.15.1
+  $CURR_DIR/src/tools/setup-virtualenv.sh $TEMP_DIR # 生成Python虚拟环境
+  $TEMP_DIR/bin/pip install nodeenv                 # 在Python虚拟环境中安装nodejs环境
+  $TEMP_DIR/bin/nodeenv --verbose -p --node=14.15.1 --mirror=https://registry.npmmirror.com/node    # 初始化nodejs编译环境，使用本地镜像仓库
   cd src/pybind/mgr/dashboard/frontend
 
-  . $TEMP_DIR/bin/activate
-  NG_CLI_ANALYTICS=false timeout 1h npm ci
+  . $TEMP_DIR/bin/activate  # 激活nodejs编译环境
+  npm set registry https://registry.npmmirror.com  # 设置npm仓库为本地源
+  NG_CLI_ANALYTICS=false timeout 1h npm ci  # 安装nodejs依赖（限时1小时）
   echo "Building ceph-dashboard frontend with build:localize script";
   # we need to use "--" because so that "--prod" survives accross all
   # scripts redirections inside package.json
-  npm run build:localize -- --prod
-  deactivate
+  # 我们需要使用“--”，因为这样“--prod”就可以在package.json中的所有脚本重定向中幸存下来
+  npm run build:localize -- --prod  # 编译
+  deactivate    # 退出nodejs编译环境
   cd $CURR_DIR
-  rm -rf $TEMP_DIR
-  tar cf dashboard_frontend.tar $outfile/src/pybind/mgr/dashboard/frontend/dist
+  rm -rf $TEMP_DIR  # 删除临时文件
+  tar cf dashboard_frontend.tar $outfile/src/pybind/mgr/dashboard/frontend/dist # 打包
 }
 
+# 生成rook客户端
 generate_rook_ceph_client() {
-  $outfile/src/pybind/mgr/rook/generate_rook_ceph_client.sh
+  $outfile/src/pybind/mgr/rook/generate_rook_ceph_client.sh # rook客户端为python脚本，所以无需编译，只需复制文件即可
   tar cf rook_ceph_client.tar $outfile/src/pybind/mgr/rook/rook_client/*.py
 }
 
 # clean out old cruft...
 echo "cleanup..."
-rm -f $outfile*
+rm -f $outfile*     # 删除之前生成的文件（如果有的话）
 
 # build new tarball
 echo "building tarball..."
+# 将所有源码，包括依赖的子项目源码全部打成一个单一的tar包
 bin/git-archive-all.sh --prefix ceph-$version/ \
 		       --verbose \
 		       --ignore corpus \
@@ -191,19 +221,24 @@ ln -s . $outfile
 tar cvf $outfile.version.tar $outfile/src/.git_version $outfile/ceph.spec
 # NOTE: If you change this version number make sure the package is available
 # at the three URLs referenced below (may involve uploading to download.ceph.com)
+# 注意：如果您更改此版本号，请确保包在下面引用的三个URL中可用（可能涉及上载到download.ceph.com）
+# 下载并重新打包boost库
 boost_version=1.75.0
 download_boost $boost_version 953db31e016db7bb207f11432bef7df100516eeb746843fa0486a222e3fd49cb \
                https://boostorg.jfrog.io/artifactory/main/release/$boost_version/source \
                https://downloads.sourceforge.net/project/boost/boost/$boost_version \
                https://download.ceph.com/qa
+# 下载并重新打包liburing库
 download_liburing 0.7 8e2842cfe947f3a443af301bdd6d034455536c38a455c7a700d0c1ad165a7543 \
                   https://github.com/axboe/liburing/archive \
                   https://git.kernel.dk/cgit/liburing/snapshot
+# 下载并重新打包pmdk库
 pmdk_version=1.10
 download_pmdk $pmdk_version 08dafcf94db5ac13fac9139c92225d9aa5f3724ea74beee4e6ca19a01a2eb20c \
                https://github.com/pmem/pmdk/releases/download/$pmdk_version
-build_dashboard_frontend
-generate_rook_ceph_client
+build_dashboard_frontend    # 生成dashboard前端应用
+generate_rook_ceph_client   # 生成rook客户端
+# 组装成一个完整的tar包
 for tarball in $outfile.version   \
                $outfile.boost     \
                $outfile.liburing  \
@@ -214,10 +249,10 @@ for tarball in $outfile.version   \
     tar --concatenate -f $outfile.all.tar $tarball.tar
     rm $tarball.tar
 done
-mv $outfile.all.tar $outfile.tar
+mv $outfile.all.tar $outfile.tar    # 重命名
 rm $outfile
 
 echo "compressing..."
-bzip2 -9 $outfile.tar
+bzip2 -9 $outfile.tar   # 压缩成bz格式
 
 echo "done."

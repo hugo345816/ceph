@@ -39,17 +39,18 @@ set -e
 set -C # noclobber
 
 # TRAP SIGNALS
-trap 'cleanup' QUIT EXIT
+trap 'cleanup' QUIT EXIT    # 脚本退出时执行清理操作
 
 # For security reasons, explicitly set the internal field separator
 # to newline, space, tab
+# 出于安全原因，将内部字段分隔符显式设置为换行符、空格、制表符
 OLD_IFS=$IFS
 IFS='
  	'
 
 function cleanup () {
-    rm -rf $TMPDIR
-    IFS="$OLD_IFS"
+    rm -rf $TMPDIR  # 删除临时文件
+    IFS="$OLD_IFS"  # 恢复分隔符
 }
 
 function usage () {
@@ -103,13 +104,13 @@ function version () {
 readonly PROGRAM=`basename "$0"`
 readonly VERSION=0.2
 
-OLD_PWD="`pwd`"
-TMPDIR=`mktemp -d "${TMPDIR:-/tmp}/$PROGRAM.XXXXXX"`
-TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress
-TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`
-OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default
-SEPARATE=0
-VERBOSE=0
+OLD_PWD="`pwd`"     # 保存当前目录
+TMPDIR=`mktemp -d "${TMPDIR:-/tmp}/$PROGRAM.XXXXXX"`    # 创建临时目录
+TMPFILE=`mktemp "$TMPDIR/$PROGRAM.XXXXXX"` # Create a place to store our work's progress    创建一个存储工作进度的文件
+TOARCHIVE=`mktemp "$TMPDIR/$PROGRAM.toarchive.XXXXXX"`  # 创建一个归档文件
+OUT_FILE=$OLD_PWD # assume "this directory" without a name change by default    默认情况下假定“这个目录”不更改名称
+SEPARATE=0  # 是否拆分归档文件，如果是的话`OUT_FILE`必须是一个已存在的目录
+VERBOSE=0   # 是否打印详细信息
 
 TARCMD=tar
 [[ $(uname) == "Darwin" ]] && TARCMD=gnutar
@@ -182,17 +183,17 @@ while test $# -gt 0; do
 done
 
 if [ ! -z "$1" ]; then
-    OUT_FILE="$1"
+    OUT_FILE="$1"   # 使用指定的文件名
     shift
 fi
 
 # Validate parameters; error early, error often.
 if [ $SEPARATE -eq 1 -a ! -d $OUT_FILE ]; then
-    echo "When creating multiple archives, your destination must be a directory."
-    echo "If it's not, you risk being surprised when your files are overwritten."
+    echo "When creating multiple archives, your destination must be a directory."   # 创建多个存档时，目标必须是一个目录。
+    echo "If it's not, you risk being surprised when your files are overwritten."   # 如果不是，当您的文件被覆盖时，您可能会感到惊讶。
     exit
 elif [ `git config -l | grep -q '^core\.bare=false'; echo $?` -ne 0 ]; then
-    echo "$PROGRAM must be run from a git working copy (i.e., not a bare repository)."
+    echo "$PROGRAM must be run from a git working copy (i.e., not a bare repository)."  # 当前目录必须是一个git工作目录，而非一个bare仓库
     exit
 fi
 
@@ -200,6 +201,7 @@ fi
 if [ $VERBOSE -eq 1 ]; then
     echo -n "creating superproject archive..."
 fi
+# 打包源码
 git archive --format=$FORMAT --prefix="$PREFIX" $TREEISH > $TMPDIR/$(basename "$(pwd)").$FORMAT
 if [ $VERBOSE -eq 1 ]; then
     echo "done"
@@ -212,12 +214,15 @@ if [ $VERBOSE -eq 1 ]; then
 fi
 # find all '.git' dirs, these show us the remaining to-be-archived dirs
 # we only want directories that are below the current directory
+# 找到所有的“.git”目录，这些目录会向我们显示剩余的要存档的目录，我们只想要当前目录下的目录
 find . -mindepth 2 -name '.git' -type d -print | sed -e 's/^\.\///' -e 's/\.git$//' >> $TOARCHIVE
 # as of version 1.7.8, git places the submodule .git directories under the superprojects .git dir
 # the submodules get a .git file that points to their .git dir. we need to find all of these too
+# 从1.7.8版本开始，git将子模块.git目录放在superprojects.git-dir下，子模块会得到一个指向其.git目录的.git文件。我们也需要找到所有这些
 find . -mindepth 2 -name '.git' -type f -print | xargs grep -l "gitdir" | sed -e 's/^\.\///' -e 's/\.git$//' >> $TOARCHIVE
 
 if [ -n "$IGNORE" ]; then
+    # 传递给脚本的参数中带有`--ignore corpus`参数，则忽略掉指定的子模块
     cat $TOARCHIVE | grep -v $IGNORE > $TOARCHIVE.new
     mv $TOARCHIVE.new $TOARCHIVE
 fi
@@ -235,6 +240,7 @@ if [ $VERBOSE -eq 1 ]; then
     echo -n "archiving submodules..."
 fi
 while read path; do
+    # 打包各个子模块
     TREEISH=$(git submodule | grep "^ .*${path%/} " | cut -d ' ' -f 2) # git submodule does not list trailing slashes in $path
     cd "$path"
     git archive --format=$FORMAT --prefix="${PREFIX}$path" ${TREEISH:-HEAD} > "$TMPDIR"/"$(echo "$path" | sed -e 's/\//./g')"$FORMAT
@@ -253,6 +259,7 @@ if [ $VERBOSE -eq 1 ]; then
     echo -n "concatenating archives into single archive..."
 fi
 # Concatenate archives into a super-archive.
+# 将多个归档文件合并为一个
 if [ $SEPARATE -eq 0 ]; then
     if [ $FORMAT == 'tar' ]; then
         sed -e '1d' $TMPFILE | while read file; do
